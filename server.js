@@ -5,6 +5,8 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 
+const STRIPE_LOCATION_ID = 'tml_GrEukQyUd9WLDn';
+
 // Middleware pour analyser le JSON (sauf pour le webhook qui nécessite le corps brut)
 app.use((req, res, next) => {
   if (req.originalUrl === '/v1/stripe/webhook') {
