@@ -70,33 +70,59 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
 app.get('/v1/stripe/account-status', async (req, res) => {
   try {
     const { merchantId } = req.query;
-    const merchant = merchantsDB[merchantId];
 
-    if (!merchant) {
-      return res.json({ details_submitted: false, charges_enabled: false });
+    // 1. Validation du paramètre obligatoire
+    if (!merchantId) {
+      return res.status(400).json({ error: 'Le paramètre merchantId est requis.' });
     }
 
-    // Interroger directement Stripe pour vérifier l'état à jour
+    const merchant = merchantsDB[merchantId];
+
+    // 2. Si le marchand n'existe pas ou n'a pas encore de compte Stripe associé
+    if (!merchant || !merchant.stripeAccountId) {
+      return res.json({
+        stripe_account_id: null,
+        details_submitted: false,
+        charges_enabled: false
+      });
+    }
+
+    // 3. Interroger l'API Stripe
     const account = await stripe.accounts.retrieve(merchant.stripeAccountId);
 
-    // Mettre à jour notre mémoire locale
+    // 4. Mettre à jour le cache local
     merchant.details_submitted = account.details_submitted;
     merchant.charges_enabled = account.charges_enabled;
 
-    res.json({
+    // 5. Réponse propre
+    return res.json({
       stripe_account_id: account.id,
       details_submitted: account.details_submitted,
       charges_enabled: account.charges_enabled
     });
 
   } catch (error) {
-    console.error('Erreur Vérification Statut:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erreur Vérification Statut Stripe:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
-
+//-------------------------------------------------------------------------------
+// 3.Endpoint pour récupérer les lecteurs actifs sur votre emplacement
+//-------------------------------------------------------------------------------
+// Endpoint pour récupérer les lecteurs actifs sur votre emplacement
+app.get('/v1/stripe/terminal/readers', async (req, res) => {
+  try {
+    const readers = await stripe.terminal.readers.list({
+      location: STRIPE_LOCATION_ID, // Votre ID d'emplacement
+      status: 'online'
+    });
+    res.json(readers.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});	
 // -----------------------------------------------------------------------------
-// 3. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
+// 4. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
