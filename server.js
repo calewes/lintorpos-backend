@@ -59,8 +59,8 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
     res.json({ onboarding_url: accountLink.url });
 
   } catch (error) {
-    console.error('Erreur Onboarding:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erreur enregistrement terminal:', error);
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
 
@@ -97,8 +97,8 @@ app.get('/v1/stripe/account-status', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erreur Vérification Statut Stripe:', error);
-    return res.status(500).json({ error: error.message });
+   console.error('Erreur enregistrement terminal:', error);
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
 
@@ -121,8 +121,8 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
     return res.json(readers.data);
 
   } catch (error) {
-    console.error('Erreur Lecteurs Terminal:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Erreur enregistrement terminal:', error);
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 }); // <-- L'ACCOLADE ET LA PARENTHÈSE ÉTAIENT MANQUANTES ICI
 
@@ -179,7 +179,7 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
 
   } catch (error) {
     console.error('Erreur enregistrement terminal:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
 
