@@ -144,22 +144,22 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     );
 
     // 2. Créer l'emplacement automatiquement avec l'adresse dynamique reçue
+   // 2. Créer l'emplacement automatiquement si non trouvé
     if (!location) {
       location = await stripe.terminal.locations.create({
         display_name: `Magasin ${storeCode}`,
         address: {
-          line1: address?.line1 || 'Non spécifié',
-          city: address?.city || 'Montreal',
+          line1: address?.line1 || '3925 rue Merckell',
+          city: address?.city || 'Laval',
           state: address?.state || 'QC',
           country: address?.country || 'CA',
-          postal_code: address?.postalCode || 'H1A 1A1',
+          postal_code: address?.postalCode || 'H7C 2T9',
         },
         metadata: {
           lintor_store_code: storeCode
         }
       });
     }
-
     // 3. Enregistrer le lecteur sur cet emplacement Stripe
     const reader = await stripe.terminal.readers.create({
       registration_code: registrationCode,
