@@ -16,7 +16,7 @@ app.use((req, res, next) => {
 
 app.use(cors());
 
-// Base de données temporaire en mémoire (À remplacer par votre BDD SQLite/PostgreSQL)
+// Base de données temporaire en mémoire
 const merchantsDB = {};
 
 // -----------------------------------------------------------------------------
@@ -71,14 +71,12 @@ app.get('/v1/stripe/account-status', async (req, res) => {
   try {
     const { merchantId } = req.query;
 
-    // 1. Validation du paramètre obligatoire
     if (!merchantId) {
       return res.status(400).json({ error: 'Le paramètre merchantId est requis.' });
     }
 
     const merchant = merchantsDB[merchantId];
 
-    // 2. Si le marchand n'existe pas ou n'a pas encore de compte Stripe associé
     if (!merchant || !merchant.stripeAccountId) {
       return res.json({
         stripe_account_id: null,
@@ -87,14 +85,11 @@ app.get('/v1/stripe/account-status', async (req, res) => {
       });
     }
 
-    // 3. Interroger l'API Stripe
     const account = await stripe.accounts.retrieve(merchant.stripeAccountId);
 
-    // 4. Mettre à jour le cache local
     merchant.details_submitted = account.details_submitted;
     merchant.charges_enabled = account.charges_enabled;
 
-    // 5. Réponse propre
     return res.json({
       stripe_account_id: account.id,
       details_submitted: account.details_submitted,
@@ -106,12 +101,13 @@ app.get('/v1/stripe/account-status', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-//-------------------------------------------------------------------------------
-// 3.Endpoint pour récupérer les lecteurs actifs sur votre emplacement
-//-------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// 3. ROUTE : Récupérer les lecteurs actifs sur un emplacement (GET)
+// -----------------------------------------------------------------------------
 app.get('/v1/stripe/terminal/readers', async (req, res) => {
   try {
-    const { locationId } = req.query; // Récupère le locationId transmis par JavaFX
+    const { locationId } = req.query;
 
     if (!locationId) {
       return res.status(400).json({ error: 'Le paramètre locationId est obligatoire.' });
@@ -128,9 +124,11 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
     console.error('Erreur Lecteurs Terminal:', error);
     return res.status(500).json({ error: error.message });
   }
-  // ------------------------------------------------------------------
-//4. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique
-// ------------------------------------------------------------------
+}); // <-- L'ACCOLADE ET LA PARENTHÈSE ÉTAIENT MANQUANTES ICI
+
+// -----------------------------------------------------------------------------
+// 4. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique (POST)
+// -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
   try {
     const { registrationCode, storeCode, label, address } = req.body;
@@ -186,8 +184,9 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 // -----------------------------------------------------------------------------
-// 5. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
+// 5. ROUTE : Webhook Stripe (POST - Notification automatique)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -200,10 +199,9 @@ app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, 
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Événement déclenché lorsque le marchand termine la saisie
   if (event.type === 'account.updated') {
     const account = event.data.object;
-    const merchantId = account.metadata.merchantId;
+    const merchantId = account.metadata?.merchantId;
 
     if (merchantId && merchantsDB[merchantId]) {
       merchantsDB[merchantId].details_submitted = account.details_submitted;
