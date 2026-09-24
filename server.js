@@ -5,8 +5,6 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 
-const STRIPE_LOCATION_ID = 'tml_GrEukQyUd9WLDn';
-
 // Middleware pour analyser le JSON (sauf pour le webhook qui nécessite le corps brut)
 app.use((req, res, next) => {
   if (req.originalUrl === '/v1/stripe/webhook') {
@@ -111,18 +109,25 @@ app.get('/v1/stripe/account-status', async (req, res) => {
 //-------------------------------------------------------------------------------
 // 3.Endpoint pour récupérer les lecteurs actifs sur votre emplacement
 //-------------------------------------------------------------------------------
-// Endpoint pour récupérer les lecteurs actifs sur votre emplacement
 app.get('/v1/stripe/terminal/readers', async (req, res) => {
   try {
+    const { locationId } = req.query; // Récupère le locationId transmis par JavaFX
+
+    if (!locationId) {
+      return res.status(400).json({ error: 'Le paramètre locationId est obligatoire.' });
+    }
+
     const readers = await stripe.terminal.readers.list({
-      location: STRIPE_LOCATION_ID, // Votre ID d'emplacement
+      location: locationId,
       status: 'online'
     });
-    res.json(readers.data);
+
+    return res.json(readers.data);
+
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Erreur Lecteurs Terminal:', error);
+    return res.status(500).json({ error: error.message });
   }
-});	
 // -----------------------------------------------------------------------------
 // 4. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
 // -----------------------------------------------------------------------------
