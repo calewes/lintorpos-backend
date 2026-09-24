@@ -128,8 +128,66 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
     console.error('Erreur Lecteurs Terminal:', error);
     return res.status(500).json({ error: error.message });
   }
+  // ------------------------------------------------------------------
+//4. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique
+// ------------------------------------------------------------------
+app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
+  try {
+    const { registrationCode, storeCode, label, address } = req.body;
+
+    if (!registrationCode || !storeCode) {
+      return res.status(400).json({ error: 'Le code à 3 mots et le code magasin (storeCode) sont requis.' });
+    }
+
+    // 1. Chercher si un emplacement Stripe existe déjà pour ce storeCode
+    const existingLocations = await stripe.terminal.locations.list({ limit: 100 });
+    let location = existingLocations.data.find(
+      loc => loc.metadata && loc.metadata.lintor_store_code === storeCode
+    );
+
+    // 2. Créer l'emplacement automatiquement avec l'adresse dynamique reçue
+    if (!location) {
+      location = await stripe.terminal.locations.create({
+        display_name: `Magasin ${storeCode}`,
+        address: {
+          line1: address?.line1 || 'Non spécifié',
+          city: address?.city || 'Montreal',
+          state: address?.state || 'QC',
+          country: address?.country || 'CA',
+          postal_code: address?.postalCode || 'H1A 1A1',
+        },
+        metadata: {
+          lintor_store_code: storeCode
+        }
+      });
+    }
+
+    // 3. Enregistrer le lecteur sur cet emplacement Stripe
+    const reader = await stripe.terminal.readers.create({
+      registration_code: registrationCode,
+      label: label || `Caisse ${storeCode}`,
+      location: location.id,
+      metadata: {
+        lintor_store_code: storeCode
+      }
+    });
+
+    // 4. Renvoi de la réponse JSON au client JavaFX
+    return res.json({
+      success: true,
+      storeCode: storeCode,
+      locationId: location.id,
+      readerId: reader.id,
+      label: reader.label
+    });
+
+  } catch (error) {
+    console.error('Erreur enregistrement terminal:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 // -----------------------------------------------------------------------------
-// 4. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
+// 5. ROUTE : Webhook Stripe (POST - Notification automatique de Stripe)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
