@@ -59,7 +59,7 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
     res.json({ onboarding_url: accountLink.url });
 
   } catch (error) {
-    console.error('Erreur enregistrement terminal:', error);
+    console.error('Erreur Onboarding Link:', error);
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
@@ -97,7 +97,7 @@ app.get('/v1/stripe/account-status', async (req, res) => {
     });
 
   } catch (error) {
-   console.error('Erreur enregistrement terminal:', error);
+    console.error('Erreur Account Status:', error);
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
@@ -121,10 +121,10 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
     return res.json(readers.data);
 
   } catch (error) {
-    console.error('Erreur enregistrement terminal:', error);
+    console.error('Erreur Récupération Lecteurs:', error);
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
-}); // <-- L'ACCOLADE ET LA PARENTHÈSE ÉTAIENT MANQUANTES ICI
+});
 
 // -----------------------------------------------------------------------------
 // 4. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique (POST)
@@ -142,33 +142,38 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     let location = existingLocations.data.find(
       loc => loc.metadata && loc.metadata.lintor_store_code === storeCode
     );
-    // Nettoyage du code postal : majuscules + retrait des espaces multiples
-    const formattedPostalCode = (address?.postalCode || 'H7C 2T9')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, ''); // Garde uniquement les lettres et chiffres (ex: H7C2T9)
 
-    // Formater en "H7C 2T9" avec un espace au milieu si la longueur est de 6 caractères
-    const finalPostalCode = formattedPostalCode.length === 6 
-      ? `${formattedPostalCode.slice(0, 3)} ${formattedPostalCode.slice(3)}`
-      : formattedPostalCode;
-
-    // 2. Créer l'emplacement automatiquement
+    // 2. Créer l'emplacement automatiquement s'il n'existe pas
     if (!location) {
+      // Traitement et nettoyage du code postal
+      const rawPostal = address?.postalCode || address?.postal_code || 'H7C 2T9';
+      const cleanPostal = rawPostal.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const finalPostalCode = cleanPostal.length === 6 
+        ? `${cleanPostal.slice(0, 3)} ${cleanPostal.slice(3)}` 
+        : cleanPostal;
+
+      // Déterminer le code pays ISO-2 (Ex: "CA" par défaut au lieu de "QUÉBEC")
+      let countryCode = (address?.country || 'CA').toUpperCase().trim();
+      if (countryCode.length > 2) {
+        countryCode = 'CA'; // Fallback sécurisé vers CA
+      }
+
       location = await stripe.terminal.locations.create({
         display_name: `Magasin ${storeCode}`,
         address: {
           line1: address?.line1 || '3925, rue Merckell',
           city: address?.city || 'Laval',
-          state: 'QC',
-          country: 'CA',
-          postal_code: finalPostalCode // "H7C 2T9"
+          state: address?.state || 'QC',
+          country: countryCode,
+          postal_code: finalPostalCode
         },
         metadata: {
           lintor_store_code: storeCode
         }
       });
     }
-     // 3. Enregistrer le lecteur sur cet emplacement Stripe
+
+    // 3. Enregistrer le lecteur sur cet emplacement Stripe
     const reader = await stripe.terminal.readers.create({
       registration_code: registrationCode,
       label: label || `Caisse ${storeCode}`,
