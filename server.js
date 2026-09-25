@@ -267,3 +267,36 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
 });
+//------------------------------------------------------------------------
+//Li le acc.. dans dans le tableau de bord de Stripe
+//------------------------------------------------------------------------
+app.post('/v1/stripe/onboarding-link', async (req, res) => {
+  try {
+    const { merchantId } = req.query;
+
+    // 1. Création du compte connecté sur Stripe
+    const account = await stripe.accounts.create({
+      type: 'standard',
+      metadata: { merchantId: merchantId }
+    });
+
+    // 2. Génération du lien d'onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: 'https://api.lintorpos.com/reauth',
+      return_url: 'https://api.lintorpos.com/success',
+      type: 'account_onboarding',
+    });
+
+    // 3. Renvoyer l'URL ET l'ID du compte à JavaFX
+    return res.json({
+      success: true,
+      stripe_account_id: account.id, // ex: acct_1UJYRM2X3GifxTGp
+      onboarding_url: accountLink.url
+    });
+
+  } catch (error) {
+    console.error('Erreur onboarding:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
