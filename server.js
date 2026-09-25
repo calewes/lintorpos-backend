@@ -225,6 +225,42 @@ app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, 
 
   res.json({ received: true });
 });
+// -----------------------------------------------------------------------------
+// 6. ROUTE : Envoyer une transaction de test sur le terminal (POST)
+// -----------------------------------------------------------------------------
+app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
+  try {
+    const { readerId, amount, currency } = req.body; // amount en cents (ex: 100 pour $1.00 CAD)
+
+    if (!readerId || !amount) {
+      return res.status(400).json({ error: 'Le readerId et le montant (amount) sont requis.' });
+    }
+
+    // A. Créer l'intention de paiement (PaymentIntent) avec les méthodes de paiement Terminal
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: parseInt(amount, 10),
+      currency: currency || 'cad',
+      payment_method_types: ['card_present'],
+      capture_method: 'automatic' // Ou 'manual' si vous souhaitez capturer plus tard
+    });
+
+    // B. Pousser le paiement sur le lecteur WisePOS E
+    const reader = await stripe.terminal.readers.processPaymentIntent(readerId, {
+      payment_intent: paymentIntent.id
+    });
+
+    return res.json({
+      success: true,
+      readerId: reader.id,
+      paymentIntentId: paymentIntent.id,
+      status: reader.action ? reader.action.status : 'in_progress'
+    });
+
+  } catch (error) {
+    console.error('Erreur traitement paiement terminal:', error);
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
+  }
+});
 
 // Démarrage du serveur
 const PORT = process.env.PORT || 3000;
