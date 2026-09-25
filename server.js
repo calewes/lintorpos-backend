@@ -296,3 +296,36 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
 });
+//-----------------------------------------------------------------------
+//Simulation de la carte présentés
+//-----------------------------------------------------------------------
+// ROUTE : Simuler la présentation d'une carte de test sur le lecteur physique
+app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
+  try {
+    const { readerId, merchantId } = req.body;
+
+    if (!readerId) {
+      return res.status(400).json({ error: 'Le readerId est requis.' });
+    }
+
+    const merchant = merchantsDB[merchantId];
+    const stripeAccountId = merchant?.stripeAccountId;
+    const requestOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : {};
+
+    // Simulation de la présentation d'une carte Visa de test (succès)
+    const reader = await stripe.terminal.readers.presentPaymentMethod(
+      readerId,
+      { type: 'card_present' },
+      requestOptions
+    );
+
+    return res.json({
+      success: true,
+      status: reader.action ? reader.action.status : 'completed'
+    });
+
+  } catch (error) {
+    console.error('Erreur simulation paiement:', error);
+    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
+  }
+});
