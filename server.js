@@ -142,7 +142,7 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     let location = existingLocations.data.find(
       loc => loc.metadata && loc.metadata.lintor_store_code === storeCode
     );
-    // 2. Créer l'emplacement automatiquement s'il n'existe pas
+    // 2. Créer l'emplacement automatiquement
     if (!location) {
       location = await stripe.terminal.locations.create({
         display_name: `Magasin ${storeCode}`,
@@ -150,15 +150,15 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
           line1: address?.line1 || '3925, rue Merckell',
           city: address?.city || 'Laval',
           state: address?.state || 'QC',
-          country: address?.country || 'CA',
-          postal_code: address?.postalCode || 'H7C 2T9'
+          country: 'CA', // Toujours utiliser 'CA' pour le Canada
+          postal_code: address?.postalCode || 'H7C 2T9',
         },
         metadata: {
           lintor_store_code: storeCode
         }
       });
     }
-       // 3. Enregistrer le lecteur sur cet emplacement Stripe
+          // 3. Enregistrer le lecteur sur cet emplacement Stripe
     const reader = await stripe.terminal.readers.create({
       registration_code: registrationCode,
       label: label || `Caisse ${storeCode}`,
