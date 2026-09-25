@@ -56,7 +56,12 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
       type: 'account_onboarding',
     });
 
-    res.json({ onboarding_url: accountLink.url });
+    // C. Renvoie de l'URL ET du stripe_account_id à JavaFX
+    return res.json({
+      success: true,
+      stripe_account_id: stripeAccountId,
+      onboarding_url: accountLink.url
+    });
 
   } catch (error) {
     console.error('Erreur Onboarding Link:', error);
@@ -65,7 +70,35 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 2. ROUTE : Vérifier le statut du compte (GET - Utilisé par JavaFX Polling)
+// 2. ROUTE : Page HTML de confirmation de l'onboarding (GET)
+// -----------------------------------------------------------------------------
+app.get('/success', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+      <meta charset="UTF-8">
+      <title>Configuration LintorPos</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; background-color: #f4f6f9; }
+        .card { background: white; max-width: 480px; margin: 0 auto; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2e7d32; margin-bottom: 10px; }
+        p { color: #555; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>Compte Stripe Connecté !</h1>
+        <p>Votre compte a été associé avec succès à LintorPos.</p>
+        <p>Vous pouvez maintenant fermer cette fenêtre et continuer dans votre application.</p>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+// -----------------------------------------------------------------------------
+// 3. ROUTE : Vérifier le statut du compte (GET - Utilisé par JavaFX Polling)
 // -----------------------------------------------------------------------------
 app.get('/v1/stripe/account-status', async (req, res) => {
   try {
@@ -103,7 +136,7 @@ app.get('/v1/stripe/account-status', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 3. ROUTE : Récupérer les lecteurs actifs sur un emplacement (GET)
+// 4. ROUTE : Récupérer les lecteurs actifs sur un emplacement (GET)
 // -----------------------------------------------------------------------------
 app.get('/v1/stripe/terminal/readers', async (req, res) => {
   try {
@@ -127,7 +160,7 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 4. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique (POST)
+// 5. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
   try {
@@ -145,17 +178,15 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
 
     // 2. Créer l'emplacement automatiquement s'il n'existe pas
     if (!location) {
-      // Traitement et nettoyage du code postal
       const rawPostal = address?.postalCode || address?.postal_code || 'H7C 2T9';
       const cleanPostal = rawPostal.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const finalPostalCode = cleanPostal.length === 6 
         ? `${cleanPostal.slice(0, 3)} ${cleanPostal.slice(3)}` 
         : cleanPostal;
 
-      // Déterminer le code pays ISO-2 (Ex: "CA" par défaut au lieu de "QUÉBEC")
       let countryCode = (address?.country || 'CA').toUpperCase().trim();
       if (countryCode.length > 2) {
-        countryCode = 'CA'; // Fallback sécurisé vers CA
+        countryCode = 'CA';
       }
 
       location = await stripe.terminal.locations.create({
@@ -183,7 +214,6 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
       }
     });
 
-    // 4. Renvoi de la réponse JSON au client JavaFX
     return res.json({
       success: true,
       storeCode: storeCode,
@@ -199,7 +229,7 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 5. ROUTE : Webhook Stripe (POST - Notification automatique)
+// 6. ROUTE : Webhook Stripe (POST - Notification automatique)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -225,26 +255,25 @@ app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, 
 
   res.json({ received: true });
 });
+
 // -----------------------------------------------------------------------------
-// 6. ROUTE : Envoyer une transaction de test sur le terminal (POST)
+// 7. ROUTE : Envoyer une transaction de test sur le terminal (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
   try {
-    const { readerId, amount, currency } = req.body; // amount en cents (ex: 100 pour $1.00 CAD)
+    const { readerId, amount, currency } = req.body;
 
     if (!readerId || !amount) {
       return res.status(400).json({ error: 'Le readerId et le montant (amount) sont requis.' });
     }
 
-    // A. Créer l'intention de paiement (PaymentIntent) avec les méthodes de paiement Terminal
     const paymentIntent = await stripe.paymentIntents.create({
       amount: parseInt(amount, 10),
       currency: currency || 'cad',
       payment_method_types: ['card_present'],
-      capture_method: 'automatic' // Ou 'manual' si vous souhaitez capturer plus tard
+      capture_method: 'automatic'
     });
 
-    // B. Pousser le paiement sur le lecteur WisePOS E
     const reader = await stripe.terminal.readers.processPaymentIntent(readerId, {
       payment_intent: paymentIntent.id
     });
@@ -266,37 +295,4 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
-});
-//------------------------------------------------------------------------
-//Li le acc.. dans dans le tableau de bord de Stripe
-//------------------------------------------------------------------------
-app.post('/v1/stripe/onboarding-link', async (req, res) => {
-  try {
-    const { merchantId } = req.query;
-
-    // 1. Création du compte connecté sur Stripe
-    const account = await stripe.accounts.create({
-      type: 'standard',
-      metadata: { merchantId: merchantId }
-    });
-
-    // 2. Génération du lien d'onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: 'https://api.lintorpos.com/reauth',
-      return_url: 'https://api.lintorpos.com/success',
-      type: 'account_onboarding',
-    });
-
-    // 3. Renvoyer l'URL ET l'ID du compte à JavaFX
-    return res.json({
-      success: true,
-      stripe_account_id: account.id, // ex: acct_1UJYRM2X3GifxTGp
-      onboarding_url: accountLink.url
-    });
-
-  } catch (error) {
-    console.error('Erreur onboarding:', error);
-    return res.status(500).json({ error: error.message });
-  }
 });
