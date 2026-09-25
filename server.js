@@ -142,6 +142,16 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     let location = existingLocations.data.find(
       loc => loc.metadata && loc.metadata.lintor_store_code === storeCode
     );
+    // Nettoyage du code postal : majuscules + retrait des espaces multiples
+    const formattedPostalCode = (address?.postalCode || 'H7C 2T9')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, ''); // Garde uniquement les lettres et chiffres (ex: H7C2T9)
+
+    // Formater en "H7C 2T9" avec un espace au milieu si la longueur est de 6 caractères
+    const finalPostalCode = formattedPostalCode.length === 6 
+      ? `${formattedPostalCode.slice(0, 3)} ${formattedPostalCode.slice(3)}`
+      : formattedPostalCode;
+
     // 2. Créer l'emplacement automatiquement
     if (!location) {
       location = await stripe.terminal.locations.create({
@@ -149,16 +159,16 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
         address: {
           line1: address?.line1 || '3925, rue Merckell',
           city: address?.city || 'Laval',
-          state: address?.state || 'QC',
-          country: 'CA', // Toujours utiliser 'CA' pour le Canada
-          postal_code: address?.postalCode || 'H7C 2T9',
+          state: 'QC',
+          country: 'CA',
+          postal_code: finalPostalCode // "H7C 2T9"
         },
         metadata: {
           lintor_store_code: storeCode
         }
       });
     }
-          // 3. Enregistrer le lecteur sur cet emplacement Stripe
+     // 3. Enregistrer le lecteur sur cet emplacement Stripe
     const reader = await stripe.terminal.readers.create({
       registration_code: registrationCode,
       label: label || `Caisse ${storeCode}`,
