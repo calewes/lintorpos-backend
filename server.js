@@ -4,7 +4,6 @@ const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
-
 // Middleware pour analyser le JSON (sauf pour le webhook qui nécessite le corps brut)
 app.use((req, res, next) => {
   if (req.originalUrl === '/v1/stripe/webhook') {
@@ -18,6 +17,10 @@ app.use(cors());
 
 // Base de données temporaire en mémoire
 const merchantsDB = {};
+
+app.get('/ping', (req, res) => {
+  res.status(200).send('OK');
+});
 
 // -----------------------------------------------------------------------------
 // 1. ROUTE : Générer le lien d'onboarding Stripe Connect (POST)
