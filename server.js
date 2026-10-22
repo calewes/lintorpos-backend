@@ -332,3 +332,33 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
+//-----------------------------------------------------------------------
+//Envoit le pk_live au jason pour être enregistré terminal_config
+//-----------------------------------------------------------------------
+app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
+    try {
+        const { registrationCode, storeCode, label, address } = req.body;
+
+        // 1. Enregistrement du lecteur auprès de l'API Stripe Terminal
+        const reader = await stripe.terminal.readers.create({
+            registration_code: registrationCode,
+            label: label,
+            location: locationId, // ID de l'emplacement du magasin
+        });
+
+        // 2. Envoi de la réponse JSON complète à LintorPos
+        return res.status(200).json({
+            success: true,
+            locationId: reader.location,
+            readerId: reader.id,
+            // ON AJOUTE LA CLÉ PUBLIABLE ICI :
+            publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || stripeAccount.publishable_key
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
