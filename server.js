@@ -4,6 +4,7 @@ const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
+
 // Middleware pour analyser le JSON (sauf pour le webhook qui nécessite le corps brut)
 app.use((req, res, next) => {
   if (req.originalUrl === '/v1/stripe/webhook') {
@@ -43,7 +44,6 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
       });
       stripeAccountId = account.id;
 
-      // Sauvegarde temporaire en mémoire
       merchantsDB[merchantId] = {
         stripeAccountId: stripeAccountId,
         details_submitted: false,
@@ -59,7 +59,6 @@ app.post('/v1/stripe/onboarding-link', async (req, res) => {
       type: 'account_onboarding',
     });
 
-    // C. Renvoie de l'URL ET du stripe_account_id à JavaFX
     return res.json({
       success: true,
       stripe_account_id: stripeAccountId,
@@ -163,7 +162,7 @@ app.get('/v1/stripe/terminal/readers', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 5. ROUTE DYNAMIQUE : Enregistrer un terminal avec adresse dynamique (POST)
+// 5. ROUTE UNIFIÉE : Enregistrer un terminal et renvoyer la publishableKey (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
   try {
@@ -217,12 +216,17 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
       }
     });
 
-    return res.json({
+    // 4. Récupération de la clé publiable
+    const pkKey = process.env.STRIPE_PUBLISHABLE_KEY || "pk_test_51Td75CFI03C86ruvWyTnCuJeWiO8kLCh4ZhqVe1lnxP2RpJJwrhydx246a4AFnoMUcIbulfa5uRbsxPK4BuPde7100OENecf4b";
+
+    // 5. Réponse JSON complète envoyée à Java
+    return res.status(200).json({
       success: true,
       storeCode: storeCode,
       locationId: location.id,
       readerId: reader.id,
-      label: reader.label
+      label: reader.label,
+      publishableKey: pkKey // <-- CLÉ DÉSORMAIS RENVOYÉE SANS FAUTE
     });
 
   } catch (error) {
@@ -232,7 +236,7 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// 6. ROUTE : Webhook Stripe (POST - Notification automatique)
+// 6. ROUTE : Webhook Stripe (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -260,7 +264,7 @@ app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, 
 });
 
 // -----------------------------------------------------------------------------
-// 7. ROUTE : Envoyer une transaction de test sur le terminal (POST)
+// 7. ROUTE : Traitement du paiement sur le terminal (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
   try {
@@ -294,15 +298,9 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
   }
 });
 
-// Démarrage du serveur
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
-});
-//-----------------------------------------------------------------------
-//Simulation de la carte présentés
-//-----------------------------------------------------------------------
-// ROUTE : Simuler la présentation d'une carte de test sur le lecteur physique
+// -----------------------------------------------------------------------------
+// 8. ROUTE : Simulation de présentation de carte (POST)
+// -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
   try {
     const { readerId, merchantId } = req.body;
@@ -315,7 +313,6 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
     const stripeAccountId = merchant?.stripeAccountId;
     const requestOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : {};
 
-    // Simulation de la présentation d'une carte Visa de test (succès)
     const reader = await stripe.terminal.readers.presentPaymentMethod(
       readerId,
       { type: 'card_present' },
@@ -332,34 +329,9 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
-//-----------------------------------------------------------------------
-//Envoit le pk_live au jason pour être enregistré terminal_config
-//-----------------------------------------------------------------------
-app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
-    try {
-        const { registrationCode, storeCode, label, address } = req.body;
 
-        // 1. Enregistrement auprès de Stripe Terminal
-        const reader = await stripe.terminal.readers.create({
-            registration_code: registrationCode,
-            label: label,
-        });
-
-        // 2. Récupération de la clé publiable (depuis les variables d'environnement .env)
-        const pkKey = process.env.STRIPE_PUBLISHABLE_KEY || "pk_test_51Td75CFI03C86ruvWyTnCuJeWiO8kLCh4ZhqVe1lnxP2RpJJwrhydx246a4AFnoMUcIbulfa5uRbsxPK4BuPde7100OENecf4b";
-
-        // 3. Renvoi de la réponse JSON au client Java
-        return res.status(200).json({
-            success: true,
-            locationId: reader.location,
-            readerId: reader.id,
-            publishableKey: pkKey // <-- CHAMP OBLIGATOIRE
-        });
-
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+// Démarrage du serveur
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
 });
