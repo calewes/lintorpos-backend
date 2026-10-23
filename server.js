@@ -339,20 +339,21 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
     try {
         const { registrationCode, storeCode, label, address } = req.body;
 
-        // 1. Enregistrement du lecteur auprès de l'API Stripe Terminal
+        // 1. Enregistrement auprès de Stripe Terminal
         const reader = await stripe.terminal.readers.create({
             registration_code: registrationCode,
             label: label,
-            location: locationId, // ID de l'emplacement du magasin
         });
 
-        // 2. Envoi de la réponse JSON complète à LintorPos
+        // 2. Récupération de la clé publiable (depuis les variables d'environnement .env)
+        const pkKey = process.env.STRIPE_PUBLISHABLE_KEY || "pk_test_51Td75CFI03C86ruvWyTnCuJeWiO8kLCh4ZhqVe1lnxP2RpJJwrhydx246a4AFnoMUcIbulfa5uRbsxPK4BuPde7100OENecf4b";
+
+        // 3. Renvoi de la réponse JSON au client Java
         return res.status(200).json({
             success: true,
             locationId: reader.location,
             readerId: reader.id,
-            // ON AJOUTE LA CLÉ PUBLIABLE ICI :
-            publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || stripeAccount.publishable_key
+            publishableKey: pkKey // <-- CHAMP OBLIGATOIRE
         });
 
     } catch (error) {
