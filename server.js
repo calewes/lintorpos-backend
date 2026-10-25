@@ -1,6 +1,3 @@
-app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
-  console.log("🚀 [TEST SERVEUR] Route simulate-payment appelée avec NOUVEAU CODE !");
-  // ...
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -229,7 +226,7 @@ app.post('/v1/stripe/terminal/register-reader', async (req, res) => {
       locationId: location.id,
       readerId: reader.id,
       label: reader.label,
-      publishableKey: pkKey // <-- CLÉ DÉSORMAIS RENVOYÉE SANS FAUTE
+      publishableKey: pkKey
     });
 
   } catch (error) {
@@ -283,7 +280,7 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
       payment_method_types: ['card_present'],
       capture_method: 'automatic'
     });
-    
+
     const reader = await stripe.terminal.readers.processPaymentIntent(readerId, {
       payment_intent: paymentIntent.id
     });
@@ -300,10 +297,12 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
+
 // -----------------------------------------------------------------------------
 // 8. ROUTE : Simulation de présentation de carte (POST)
 // -----------------------------------------------------------------------------
 app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
+  console.log("🚀 [TEST SERVEUR] Route simulate-payment appelée avec APPEL REST DIRECT !");
   try {
     const { readerId, merchantId } = req.body;
 
@@ -313,22 +312,45 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
 
     const merchant = merchantsDB[merchantId];
     const stripeAccountId = merchant?.stripeAccountId;
-    const requestOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : {};
 
-    // 🚨 Correction : Utilisation de testHelpers au lieu de terminal.readers
-    const reader = await stripe.testHelpers.terminal.readers.presentPaymentMethod(
-      readerId,
-      { type: 'card_present' },
-      requestOptions
-    );
+    // En-têtes pour l'appel REST direct à l'API Stripe
+    const headers = {
+      'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    };
+
+    if (stripeAccountId) {
+      headers['Stripe-Account'] = stripeAccountId;
+    }
+
+    // Appel direct de l'API REST Stripe Test Helpers
+    const stripeResponse = await fetch(`https://api.stripe.com/v1/test_helpers/terminal/readers/${readerId}/present_payment_method`, {
+      method: 'POST',
+      headers: headers,
+      body: 'type=card_present'
+    });
+
+    const responseData = await stripeResponse.json();
+
+    if (!stripeResponse.ok) {
+      return res.status(stripeResponse.status).json({
+        error: responseData.error ? responseData.error.message : 'Erreur lors de la simulation Stripe'
+      });
+    }
 
     return res.json({
       success: true,
-      status: reader.action ? reader.action.status : 'completed'
+      status: responseData.action ? responseData.action.status : 'completed'
     });
 
   } catch (error) {
     console.error('Erreur simulation paiement:', error);
-    return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
+    return res.status(500).json({ error: error.message });
   }
+});
+
+// Démarrage du serveur
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
 });
