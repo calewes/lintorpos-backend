@@ -280,7 +280,7 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
       payment_method_types: ['card_present'],
       capture_method: 'automatic'
     });
-
+    
     const reader = await stripe.terminal.readers.processPaymentIntent(readerId, {
       payment_intent: paymentIntent.id
     });
