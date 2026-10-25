@@ -297,7 +297,6 @@ app.post('/v1/stripe/terminal/process-payment', async (req, res) => {
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
 });
-
 // -----------------------------------------------------------------------------
 // 8. ROUTE : Simulation de présentation de carte (POST)
 // -----------------------------------------------------------------------------
@@ -313,7 +312,8 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
     const stripeAccountId = merchant?.stripeAccountId;
     const requestOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : {};
 
-    const reader = await stripe.terminal.readers.presentPaymentMethod(
+    // 🚨 Correction : Utilisation de testHelpers au lieu de terminal.readers
+    const reader = await stripe.testHelpers.terminal.readers.presentPaymentMethod(
       readerId,
       { type: 'card_present' },
       requestOptions
@@ -328,10 +328,4 @@ app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
     console.error('Erreur simulation paiement:', error);
     return res.status(500).json({ error: error.raw ? error.raw.message : error.message });
   }
-});
-
-// Démarrage du serveur
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Serveur Backend LintorPos démarré sur le port ${PORT}`);
 });
