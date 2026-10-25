@@ -1,3 +1,6 @@
+app.post('/v1/stripe/terminal/simulate-payment', async (req, res) => {
+  console.log("🚀 [TEST SERVEUR] Route simulate-payment appelée avec NOUVEAU CODE !");
+  // ...
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
